@@ -1,0 +1,5 @@
+../TraceRecorderSource/trcISR.c:25:13:xTraceISRInitialize	32	static
+../TraceRecorderSource/trcISR.c:70:13:xTraceISRRegister	48	static
+../TraceRecorderSource/trcISR.c:117:13:xTraceISRBegin	40	static,ignoring_inline_asm
+../TraceRecorderSource/trcISR.c:169:13:xTraceISREnd	40	static,ignoring_inline_asm
+../TraceRecorderSource/trcISR.c:270:18:xTraceSetISRProperties	24	static

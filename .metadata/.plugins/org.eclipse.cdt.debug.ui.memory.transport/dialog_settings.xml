@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="EXPORT_DIALOG">
+		<item key="Start" value="0x20005210"/>
+		<item key="End" value="0x200088fc"/>
+		<item key="Initial address" value="0x200048fc"/>
+		<item key="File" value="D:\\trace.bin"/>
+		<item key="SELECTED_EXPORTER" value="PlainTextExporter"/>
+	</section>
+</section>

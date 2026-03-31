@@ -1,0 +1,7 @@
+../TraceRecorderSource/trcPrint.c:21:13:xTracePrintInitialize	1
+../TraceRecorderSource/trcPrint.c:37:13:xTracePrint	5
+../TraceRecorderSource/trcPrint.c:61:13:xTraceConsoleChannelPrintF	4
+../TraceRecorderSource/trcPrint.c:88:13:xTracePrintCompactF	13
+../TraceRecorderSource/trcPrint.c:166:13:xTracePrintF	2
+../TraceRecorderSource/trcPrint.c:185:13:xTraceVPrintF	8
+../TraceRecorderSource/trcPrint.c:229:20:prvTraceVPrintF	10

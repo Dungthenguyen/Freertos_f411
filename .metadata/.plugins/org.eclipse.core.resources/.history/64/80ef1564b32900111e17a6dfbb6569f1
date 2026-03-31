@@ -1,0 +1,98 @@
+#include "fc_rc.h"
+#include "main.h"
+#include <stdio.h>
+#include "FreeRTOS.h"
+#include "task.h"
+
+volatile RC_Command_t g_rc_cmd;
+volatile uint16_t rc_raw[8] = {1500, 1500, 1000, 1500, 1000, 1000, 1000, 1000};
+volatile uint32_t rc_last_update_ms = 0;
+
+static uint8_t armed_state = 0;
+
+static float limitf(float x, float min, float max)
+{
+    if (x < min) return min;
+    if (x > max) return max;
+    return x;
+}
+
+uint8_t FC_RC_Alive(void)
+{
+    return ((HAL_GetTick() - rc_last_update_ms) < 500) ? 1 : 0;
+}
+
+void FC_RC_Init(void)
+{
+    g_rc_cmd.throttle = 1000.0f;
+    g_rc_cmd.arm = 0;
+    g_rc_cmd.failsafe = 1;
+    g_rc_cmd.update_tick = 0;
+}
+
+void FC_RC_Update(void)
+{
+    RC_Command_t temp;
+    uint16_t ch1, ch2, ch3, ch4;
+
+    taskENTER_CRITICAL();
+    ch1 = rc_raw[0];
+    ch2 = rc_raw[1];
+    ch3 = rc_raw[2];
+    ch4 = rc_raw[3];
+    taskEXIT_CRITICAL();
+
+    temp.failsafe = FC_RC_Alive() ? 0 : 1;
+    temp.update_tick = HAL_GetTick();
+
+    if (temp.failsafe)
+    {
+        armed_state = 0;
+        temp.arm = 0;
+        temp.throttle = 1000.0f;
+    }
+    else
+    {
+        // TẠM GIẢ ĐỊNH:
+        // ch3 = throttle
+        // ch4 = yaw
+        temp.throttle = limitf((float)ch3, 1000.0f, 2000.0f);
+
+        // throttle thấp + yaw trái = disarm
+        // throttle thấp + yaw phải = arm
+        if (ch3 < 1050)
+        {
+            if (ch4 < 1100)
+            {
+                armed_state = 0;
+            }
+            else if (ch4 > 1900)
+            {
+                armed_state = 1;
+            }
+        }
+
+        temp.arm = armed_state;
+    }
+
+    taskENTER_CRITICAL();
+    g_rc_cmd = temp;
+    taskEXIT_CRITICAL();
+
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, temp.arm ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    (void)ch1;
+    (void)ch2;
+}
+
+void FC_RC_PrintDebug(void)
+{
+    printf("RAW:%u %u %u %u | FS:%d ARM:%d THR:%.0f\r\n",
+           rc_raw[0],
+           rc_raw[1],
+           rc_raw[2],
+           rc_raw[3],
+           g_rc_cmd.failsafe,
+           g_rc_cmd.arm,
+           g_rc_cmd.throttle);
+}

@@ -1,0 +1,3 @@
+../Core/Src/fc_rc.c:13:6:FC_RC_Init	16	static
+../Core/Src/fc_rc.c:22:6:HAL_TIM_IC_CaptureCallback	24	static
+../Core/Src/fc_rc.c:53:6:FC_RC_Process	16	static

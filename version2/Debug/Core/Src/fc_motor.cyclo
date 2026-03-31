@@ -1,0 +1,4 @@
+../Core/Src/fc_motor.c:12:6:FC_Motor_Init	1
+../Core/Src/fc_motor.c:23:6:FC_Motor_Arm	1
+../Core/Src/fc_motor.c:38:6:FC_Motor_Disarm	1
+../Core/Src/fc_motor.c:47:6:FC_Motor_SetPWM	2

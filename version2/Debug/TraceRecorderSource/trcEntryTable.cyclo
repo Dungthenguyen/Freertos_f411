@@ -1,0 +1,10 @@
+../TraceRecorderSource/trcEntryTable.c:37:13:xTraceEntryIndexTableInitialize	1
+../TraceRecorderSource/trcEntryTable.c:47:13:xTraceEntryTableInitialize	3
+../TraceRecorderSource/trcEntryTable.c:78:13:xTraceEntryCreate	4
+../TraceRecorderSource/trcEntryTable.c:125:13:xTraceEntryDelete	2
+../TraceRecorderSource/trcEntryTable.c:166:13:xTraceEntryFind	3
+../TraceRecorderSource/trcEntryTable.c:195:13:xTraceEntrySetSymbol	3
+../TraceRecorderSource/trcEntryTable.c:230:13:xTraceEntryGetCount	1
+../TraceRecorderSource/trcEntryTable.c:243:13:xTraceEntryGetAtIndex	1
+../TraceRecorderSource/trcEntryTable.c:393:20:prvEntryIndexInitialize	2
+../TraceRecorderSource/trcEntryTable.c:407:20:prvEntryIndexTake	2

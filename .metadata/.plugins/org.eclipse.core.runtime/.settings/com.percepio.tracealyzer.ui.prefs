@@ -1,0 +1,9 @@
+eclipse.preferences.version=1
+rtosType=FreeRTOS
+sameFileHandling=Do nothing
+traceBufferAddressExpression=RecorderDataPtr
+traceBufferSizeExpression=sizeof(*RecorderDataPtr)
+traceDirectory=D\:\\Nam_4\\KI_II\\Thiet_ke_so_va_lap_trinh_nhung\\try_xuat
+traceName=truyxuat
+tracealyzerPath=C\:\\Program Files\\Percepio\\Tracealyzer 4\\TracealyzerMonitor.exe
+tracealyzerPreviousPaths=C\:\\Program Files\\Percepio\\Tracealyzer 4;C\:\\Program Files\\Percepio\\Tracealyzer 4\\TracealyzerMonitor.exe

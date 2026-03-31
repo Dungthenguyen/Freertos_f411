@@ -1,0 +1,9 @@
+../TraceRecorderSource/trcEventBuffer.c:15:13:xTraceEventBufferInitialize	24	static
+../TraceRecorderSource/trcEventBuffer.c:50:20:prvTraceEventBufferPop	24	static
+../TraceRecorderSource/trcEventBuffer.c:66:20:prvTraceEventBufferAllocPop	24	static
+../TraceRecorderSource/trcEventBuffer.c:91:13:xTraceEventBufferAlloc	40	static
+../TraceRecorderSource/trcEventBuffer.c:256:13:xTraceEventBufferAllocCommit	24	static
+../TraceRecorderSource/trcEventBuffer.c:272:13:xTraceEventBufferPush	72	static
+../TraceRecorderSource/trcEventBuffer.c:395:13:xTraceEventBufferTransferAll	48	static
+../TraceRecorderSource/trcEventBuffer.c:463:13:xTraceEventBufferTransferChunk	48	static
+../TraceRecorderSource/trcEventBuffer.c:531:13:xTraceEventBufferClear	16	static

@@ -1,0 +1,31 @@
+#ifndef FC_MPU6050_H
+#define FC_MPU6050_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <math.h>
+#include "fc_kalman.h"
+// Struct lưu trữ dữ liệu thô từ cảm biến
+typedef struct {
+    int16_t Accel_X_RAW;
+    int16_t Accel_Y_RAW;
+    int16_t Accel_Z_RAW;
+    int16_t Gyro_X_RAW;
+    int16_t Gyro_Y_RAW;
+    int16_t Gyro_Z_RAW;
+
+    // Dữ liệu đã chuyển đổi ra đơn vị vật lý (độ/s và g)
+    float Gx;
+    float Gy;
+    float Gz;
+    float Ax;
+    float Ay;
+    float Az;
+} MPU6050_t;
+
+extern MPU6050_t mpu_data;
+
+void FC_MPU6050_Init(void);
+void FC_MPU6050_Read_DMA(void); // Hàm ra lệnh cho thư ký DMA đi lấy đồ
+
+#endif // FC_MPU6050_H

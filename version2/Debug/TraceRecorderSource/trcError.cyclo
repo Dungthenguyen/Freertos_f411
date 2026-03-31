@@ -1,0 +1,7 @@
+../TraceRecorderSource/trcError.c:24:13:xTraceErrorInitialize	1
+../TraceRecorderSource/trcError.c:40:13:xTraceWarning	3
+../TraceRecorderSource/trcError.c:60:13:xTraceError	4
+../TraceRecorderSource/trcError.c:89:13:xTraceErrorGetLast	2
+../TraceRecorderSource/trcError.c:103:13:xTraceErrorClear	2
+../TraceRecorderSource/trcError.c:117:20:prvTraceErrorPrint	6
+../TraceRecorderSource/trcError.c:181:20:prvTraceErrorGetDescription	16

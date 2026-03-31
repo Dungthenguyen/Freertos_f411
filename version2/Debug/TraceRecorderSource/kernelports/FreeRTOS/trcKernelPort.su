@@ -1,0 +1,8 @@
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:139:13:xTraceKernelPortDelay	16	static
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:146:15:xTraceKernelPortIsSchedulerSuspended	8	static
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:169:13:xTraceKernelPortInitialize	16	static
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:186:13:xTraceKernelPortEnable	32	static
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:233:8:TzCtrl	16	static
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:245:13:xTraceKernelPortSetTaskMonitorData	16	static
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:269:13:xTraceKernelPortGetTaskMonitorData	16	static
+../TraceRecorderSource/kernelports/FreeRTOS/trcKernelPort.c:342:19:xTraceKernelPortGetSystemHeapHandle	4	static

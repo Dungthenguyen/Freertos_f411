@@ -1,0 +1,17 @@
+/*
+ * fc_motor.h
+ *
+ *  Created on: Mar 27, 2026
+ *      Author: Admin
+ */
+
+#ifndef INC_FC_MOTOR_H_
+#define INC_FC_MOTOR_H_
+
+#include <stdint.h>
+
+void FC_Motor_Init(void);
+void Motor_Write_us(uint16_t m1, uint16_t m2, uint16_t m3, uint16_t m4);
+void Motor_StopAll(void);
+
+#endif /* INC_FC_MOTOR_H_ */
