@@ -13,5 +13,7 @@ extern volatile uint16_t rc_channels[MAX_CHANNELS];
 // Hàm khởi tạo (nếu cần) và hàm xử lý logic Arm/Disarm gọi trong RCTask
 void FC_RC_Init(void);
 void FC_RC_Process(void);
-
+// Tìm chỗ đang có các khai báo hàm, thêm vào cuối:
+void FC_RC_CalibrateCenter(void);
+extern uint16_t rc_center[4];
 #endif // FC_RC_H

@@ -18,7 +18,7 @@ Kalman_t kalman_pitch;
 
 // Các biến lưu giá trị bù trừ sai số (Offset)
 float Gyro_X_CAL = 0, Gyro_Y_CAL = 0, Gyro_Z_CAL = 0;
-float Accel_X_CAL = 0, Accel_Y_CAL = 0;
+float Accel_X_CAL = 0, Accel_Y_CAL = 0, Accel_Z_CAL = 0;
 
 void FC_MPU6050_Init(void) {
     uint8_t check;
@@ -33,7 +33,7 @@ void FC_MPU6050_Init(void) {
         HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, 0x6B, 1, &Data, 1, 1000);
 
         // Cấu hình tần số lấy mẫu (SMPLRT_DIV)
-        Data = 0x07;
+        Data = 0x00;
         HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, 0x19, 1, &Data, 1, 1000);
 
         // Cấu hình Gyro (+/- 500 deg/s)
@@ -52,31 +52,52 @@ void FC_MPU6050_Init(void) {
 
 // Hàm hiệu chuẩn: Đọc 1000 mẫu khi mạch nằm im để tính sai số
 void FC_MPU6050_Calibrate(void) {
-    uint8_t buffer[14];
-    int32_t gx_sum = 0, gy_sum = 0, gz_sum = 0;
-    int32_t ax_sum = 0, ay_sum = 0;
+	uint8_t buffer[14];
+	    int32_t gx_sum = 0, gy_sum = 0, gz_sum = 0;
+	    int32_t ax_sum = 0, ay_sum = 0, az_sum = 0; // Thêm biến tổng cho trục Z
+	    uint16_t sample_count = 0;
 
-    for(int i = 0; i < 1000; i++) {
-        HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, 0x3B, 1, buffer, 14, 100);
+	    // 1. Chờ cảm biến ổn định
+	    osDelay(200);
 
-        ax_sum += (int16_t)(buffer[0] << 8 | buffer[1]);
-        ay_sum += (int16_t)(buffer[2] << 8 | buffer[3]);
-        // Bỏ qua trục Z vì nó đang đo trọng lực 1G
+	    // 2. Vứt bỏ 100 mẫu đầu tiên để chống nhiễu khởi động
+	    for(int i = 0; i < 100; i++) {
+	        HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, 0x3B, 1, buffer, 14, 100);
+	        osDelay(2);
+	    }
 
-        gx_sum += (int16_t)(buffer[8] << 8 | buffer[9]);
-        gy_sum += (int16_t)(buffer[10] << 8 | buffer[11]);
-        gz_sum += (int16_t)(buffer[12] << 8 | buffer[13]);
+	    // 3. Vòng lặp lấy 2000 mẫu (Giống hệt calibrateGyroSimple của bạn)
+	    for(int i = 0; i < 2000; i++) {
+	        if (HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, 0x3B, 1, buffer, 14, 100) == HAL_OK) {
+	            // Đọc RAW Gia tốc
+	            ax_sum += (int16_t)(buffer[0] << 8 | buffer[1]);
+	            ay_sum += (int16_t)(buffer[2] << 8 | buffer[3]);
+	            az_sum += (int16_t)(buffer[4] << 8 | buffer[5]);
 
-        HAL_Delay(2);
-    }
+	            // Đọc RAW Gyro
+	            gx_sum += (int16_t)(buffer[8] << 8 | buffer[9]);
+	            gy_sum += (int16_t)(buffer[10] << 8 | buffer[11]);
+	            gz_sum += (int16_t)(buffer[12] << 8 | buffer[13]);
 
-    Accel_X_CAL = (float)ax_sum / 1000.0f;
-    Accel_Y_CAL = (float)ay_sum / 1000.0f;
-    Gyro_X_CAL = (float)gx_sum / 1000.0f;
-    Gyro_Y_CAL = (float)gy_sum / 1000.0f;
-    Gyro_Z_CAL = (float)gz_sum / 1000.0f;
+	            sample_count++;
+	        }
+	        osDelay(1); // Tương đương delay(1) trong Arduino
+	    }
+
+	    // 4. Tính giá trị bù trừ (Offset)
+	    if (sample_count > 0) {
+	        Accel_X_CAL = (float)ax_sum / sample_count;
+	        Accel_Y_CAL = (float)ay_sum / sample_count;
+
+	        // TRỤC Z CỰC KỲ QUAN TRỌNG:
+	        // Cấu hình +/- 8G nên 1G tương ứng với con số RAW là 4096.
+	        // Trừ đi 4096 tương đương với việc "AccZCalibration = AccZCalibration - 1" của Arduino
+	        Accel_Z_CAL = ((float)az_sum / sample_count) - 4096.0f;
+	        Gyro_X_CAL = (float)gx_sum / sample_count;
+	        Gyro_Y_CAL = (float)gy_sum / sample_count;
+	        Gyro_Z_CAL = (float)gz_sum / sample_count;
+	    }
 }
-
 // Hàm ra lệnh DMA đọc data
 void FC_MPU6050_Read_DMA(void) {
     HAL_I2C_Mem_Read_DMA(&hi2c1, MPU6050_ADDR, 0x3B, 1, mpu_rx_buffer, 14);
@@ -85,34 +106,46 @@ void FC_MPU6050_Read_DMA(void) {
 // Ngắt DMA chạy khi đã chép xong 14 byte
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
     if (hi2c->Instance == I2C1) {
-        // Lấy dữ liệu thô và TRỪ ĐI SAI SỐ (CAL)
-        mpu_data.Accel_X_RAW = (int16_t)(mpu_rx_buffer[0] << 8 | mpu_rx_buffer[1]) - Accel_X_CAL;
-        mpu_data.Accel_Y_RAW = (int16_t)(mpu_rx_buffer[2] << 8 | mpu_rx_buffer[3]) - Accel_Y_CAL;
+        // 1. CHỈ GHÉP BYTE - GIỮ NGUYÊN GIÁ TRỊ RAW THỰC TẾ
+        mpu_data.Accel_X_RAW = (int16_t)(mpu_rx_buffer[0] << 8 | mpu_rx_buffer[1]);
+        mpu_data.Accel_Y_RAW = (int16_t)(mpu_rx_buffer[2] << 8 | mpu_rx_buffer[3]);
         mpu_data.Accel_Z_RAW = (int16_t)(mpu_rx_buffer[4] << 8 | mpu_rx_buffer[5]);
 
-        mpu_data.Gyro_X_RAW = (int16_t)(mpu_rx_buffer[8] << 8 | mpu_rx_buffer[9]) - Gyro_X_CAL;
-        mpu_data.Gyro_Y_RAW = (int16_t)(mpu_rx_buffer[10] << 8 | mpu_rx_buffer[11]) - Gyro_Y_CAL;
-        mpu_data.Gyro_Z_RAW = (int16_t)(mpu_rx_buffer[12] << 8 | mpu_rx_buffer[13]) - Gyro_Z_CAL;
+        mpu_data.Gyro_X_RAW = (int16_t)(mpu_rx_buffer[8] << 8 | mpu_rx_buffer[9]);
+        mpu_data.Gyro_Y_RAW = (int16_t)(mpu_rx_buffer[10] << 8 | mpu_rx_buffer[11]);
+        mpu_data.Gyro_Z_RAW = (int16_t)(mpu_rx_buffer[12] << 8 | mpu_rx_buffer[13]);
 
-        // Đổi ra đơn vị vật lý
-        mpu_data.Ax = mpu_data.Accel_X_RAW / 4096.0;
-        mpu_data.Ay = mpu_data.Accel_Y_RAW / 4096.0;
-        mpu_data.Az = mpu_data.Accel_Z_RAW / 4096.0;
+        // 2. TRỪ SAI SỐ (CAL) VÀ CHIA TỶ LỆ TRÊN HỆ FLOAT ĐỂ GIỮ CHÍNH XÁC
+                mpu_data.Ax = (mpu_data.Accel_X_RAW - Accel_X_CAL) / 4096.0f;
+                mpu_data.Ay = (mpu_data.Accel_Y_RAW - Accel_Y_CAL) / 4096.0f;
+                // ĐÃ ÁP DỤNG TRỪ SAI SỐ CHO TRỤC Z
+                mpu_data.Az = (mpu_data.Accel_Z_RAW - Accel_Z_CAL) / 4096.0f;
+                mpu_data.Gx = (mpu_data.Gyro_X_RAW - Gyro_X_CAL) / 65.5f;
+                mpu_data.Gy = (mpu_data.Gyro_Y_RAW - Gyro_Y_CAL) / 65.5f;
+                mpu_data.Gz = (mpu_data.Gyro_Z_RAW - Gyro_Z_CAL) / 65.5f;
 
-        mpu_data.Gx = mpu_data.Gyro_X_RAW / 65.5;
-        mpu_data.Gy = mpu_data.Gyro_Y_RAW / 65.5;
-        mpu_data.Gz = mpu_data.Gyro_Z_RAW / 65.5;
+                static float gx_filtered = 0.0f;
+                static float gy_filtered = 0.0f;
+                static float gz_filtered = 0.0f;
 
-        // Tính góc thô từ Gia tốc
-        float accel_roll  = atan2(mpu_data.Ay, mpu_data.Az) * 180.0 / M_PI;
-        float accel_pitch = atan2(-mpu_data.Ax, sqrt(mpu_data.Ay * mpu_data.Ay + mpu_data.Az * mpu_data.Az)) * 180.0 / M_PI;
+                gx_filtered = 0.9f * gx_filtered + 0.1f * mpu_data.Gx;
+                gy_filtered = 0.9f * gy_filtered + 0.1f * mpu_data.Gy;
+                gz_filtered = 0.9f * gz_filtered + 0.1f * mpu_data.Gz;
 
-        // Lọc qua Kalman
+                mpu_data.Gx = gx_filtered;
+                mpu_data.Gy = gy_filtered;
+                mpu_data.Gz = gz_filtered;
+
+        // 3. Tính góc thô từ Gia tốc
+        float accel_roll  = atan2(mpu_data.Ay, mpu_data.Az) * 180.0f / M_PI;
+        float accel_pitch = atan2(-mpu_data.Ax, sqrt(mpu_data.Ay * mpu_data.Ay + mpu_data.Az * mpu_data.Az)) * 180.0f / M_PI;
+
+        // 4. Lọc qua Kalman
         float xt = 0.001f;
         mpu_data.Roll = FC_Kalman_GetAngle(&kalman_roll, accel_roll, mpu_data.Gx, xt);
         mpu_data.Pitch = FC_Kalman_GetAngle(&kalman_pitch, accel_pitch, mpu_data.Gy, xt);
 
-        // Đánh thức PID Task
+        // 5. Đánh thức PID Task
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         vTaskNotifyGiveFromISR(pidTaskHandle, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);

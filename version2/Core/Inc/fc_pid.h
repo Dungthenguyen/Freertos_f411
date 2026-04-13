@@ -10,11 +10,12 @@ typedef struct {
     float Kd;
 
     float error_integral; // Tổng sai số (cho khâu I)
-    float previous_error; // Sai số vòng trước (cho khâu D)
+    float prev_error;
     float previous_measurement; // Dùng để tính khâu D chống nhiễu (Derivative on Measurement)
 
     float output_limit; // Giới hạn công suất tối đa
     float integral_limit; // Giới hạn khâu I (Anti-windup)
+    float prev_measurement;
 } PID_Controller_t;
 
 // Khởi tạo các thông số

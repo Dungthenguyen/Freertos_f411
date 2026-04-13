@@ -1,0 +1,117 @@
+#include "fc_rc.h"
+#include "fc_motor.h"
+#include "main.h"
+
+volatile uint16_t rc_channels[MAX_CHANNELS];
+volatile uint16_t rc_channels[MAX_CHANNELS];
+uint16_t rc_center[4] = {1500, 1500, 1500, 1500}; // ← thêm dòng này
+static uint16_t current_channel = 0;
+static uint16_t last_capture = 0;
+
+// Các biến phục vụ việc giữ cần gạt để Arm/Disarm
+static uint16_t arm_hold_counter = 0;
+static uint16_t disarm_hold_counter = 0;
+
+void FC_RC_Init(void) {
+    // Khởi tạo giá trị mặc định an toàn cho các kênh
+    for(int i=0; i<MAX_CHANNELS; i++) {
+        rc_channels[i] = 1500; // Mức giữa
+    }
+    rc_channels[2] = 1000; // Riêng kênh 3 (Ga - Throttle) ép về mức thấp nhất
+}
+void FC_RC_CalibrateCenter(void) {
+    HAL_Delay(500);
+
+    uint32_t sum0 = 0, sum1 = 0, sum3 = 0;
+
+    for (int i = 0; i < 100; i++) {
+        sum0 += rc_channels[0];
+        sum1 += rc_channels[1];
+        sum3 += rc_channels[3];
+        HAL_Delay(10);
+    }
+
+    rc_center[0] = sum0 / 100;
+    rc_center[1] = sum1 / 100;
+    rc_center[2] = 1500;
+    rc_center[3] = sum3 / 100;
+
+    // Kiểm tra hợp lệ, fallback nếu tay cầm chưa kết nối
+    if (rc_center[0] < 1400 || rc_center[0] > 1600) rc_center[0] = 1500;
+    if (rc_center[1] < 1400 || rc_center[1] > 1600) rc_center[1] = 1500;
+    if (rc_center[3] < 1400 || rc_center[3] > 1600) rc_center[3] = 1500;
+        }
+    }
+}
+// STM32 sẽ tự động gọi hàm này mỗi khi có tín hiệu cạnh lên ở chân PA6
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance == TIM3 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+
+        uint16_t current_capture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+        uint16_t diff = 0;
+
+        // Tính thời gian trôi qua giữa 2 sườn lên (Xử lý trường hợp Timer bị tràn từ 65535 về 0)
+        if (current_capture >= last_capture) {
+            diff = current_capture - last_capture;
+        } else {
+            diff = (0xFFFF - last_capture) + current_capture + 1;
+        }
+
+        last_capture = current_capture;
+
+        // Phân tích xung PPM
+        if (diff > 3000) {
+            // Đây là xung đồng bộ (Sync). Khung PPM mới chuẩn bị bắt đầu.
+            current_channel = 0;
+        } else if (current_channel < MAX_CHANNELS) {
+            // Lưu giá trị kênh hiện tại và tăng biến đếm
+            // Chỉ chấp nhận xung hợp lệ từ 900us đến 2100us để lọc nhiễu
+            if (diff > 900 && diff < 2100) {
+                rc_channels[current_channel] = diff;
+            }
+            current_channel++;
+        }
+    }
+}
+
+// Hàm này được gọi liên tục trong StartRCTask (chu kỳ 20ms)
+void FC_RC_Process(void) {
+    // FlySky mapping chuẩn:
+    // rc_channels[0] = Roll (Aileron)
+    // rc_channels[1] = Pitch (Elevator)
+    // rc_channels[2] = Throttle
+    // rc_channels[3] = Yaw (Rudder)
+
+    uint16_t throttle = rc_channels[2];
+    uint16_t yaw = rc_channels[3];
+
+    // --------------------------------------------------------
+    // Logic ARM: Ga thấp nhất + Yaw gạt hết sang phải
+    // --------------------------------------------------------
+    if (motor_state == MOTOR_DISARMED) {
+        if (throttle < 1050 && yaw > 1850) {
+            arm_hold_counter++;
+            if (arm_hold_counter > 50) { // Giữ khoảng 1 giây (50 * 20ms)
+                FC_Motor_Arm();
+                arm_hold_counter = 0;
+            }
+        } else {
+            arm_hold_counter = 0;
+        }
+    }
+
+    // --------------------------------------------------------
+    // Logic DISARM: Ga thấp nhất + Yaw gạt hết sang trái
+    // --------------------------------------------------------
+    if (motor_state == MOTOR_ARMED) {
+        if (throttle < 1050 && yaw < 1150) {
+            disarm_hold_counter++;
+            if (disarm_hold_counter > 50) {
+                FC_Motor_Disarm();
+                disarm_hold_counter = 0;
+            }
+        } else {
+            disarm_hold_counter = 0;
+        }
+    }
+}

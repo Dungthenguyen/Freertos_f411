@@ -1,0 +1,150 @@
+#include "fc_pid.h"
+#include "fc_rc.h"
+#include "fc_mpu6050.h"
+#include "fc_motor.h"
+
+// ---------------------------------------------------------
+// 1. KHAI BÁO CÁC BỘ PID
+// ---------------------------------------------------------
+PID_Controller_t pid_roll_angle;
+PID_Controller_t pid_pitch_angle;
+
+PID_Controller_t pid_roll_rate;
+PID_Controller_t pid_pitch_rate;
+PID_Controller_t pid_yaw_rate;
+
+// ---------------------------------------------------------
+// 2. HÀM TÍNH TOÁN LÕI PID (ỨNG DỤNG TÍCH PHÂN HÌNH THANG TỪ ESP32)
+// ---------------------------------------------------------
+float FC_PID_Calculate(PID_Controller_t *pid, float setpoint, float measurement, float xt) {
+    float error = setpoint - measurement;
+
+    // Khâu P (Proportional)
+    float P_out = pid->Kp * error;
+
+    // Khâu I (Integral) - Tích phân hình thang (Trapezoidal Integration)
+    pid->error_integral += pid->Ki * (error + pid->prev_error) * (xt / 2.0f);
+
+    // Giới hạn chống tràn khâu I (Anti-Windup)
+    if (pid->error_integral > pid->integral_limit) pid->error_integral = pid->integral_limit;
+    if (pid->error_integral < -pid->integral_limit) pid->error_integral = -pid->integral_limit;
+
+    // Khâu D (Derivative) - Tính trên sai số giống nguyên bản code ESP32
+    float D_out = - pid->Kd * ((error - pid->prev_error) / xt);
+
+    // Lưu lại sai số cho vòng lặp tiếp theo
+    pid->prev_error = error;
+
+    // Tổng hợp đầu ra
+    float output = P_out + pid->error_integral + D_out;
+
+    // Giới hạn đầu ra tổng
+    if (output > pid->output_limit) output = pid->output_limit;
+    if (output < -pid->output_limit) output = -pid->output_limit;
+
+    return output;
+}
+
+// ---------------------------------------------------------
+// 3. KHỞI TẠO THÔNG SỐ (BÊ NGUYÊN BỘ SỐ TỪ ESP32 SANG)
+// ---------------------------------------------------------
+void FC_PID_Init(void) {
+    // THÔNG SỐ VÒNG GÓC (Angle Loop)
+    pid_roll_angle.Kp = 2.0f;  pid_roll_angle.Ki = 0.0f;  pid_roll_angle.Kd = 0.0f;
+    pid_pitch_angle.Kp = 2.0f; pid_pitch_angle.Ki = 0.0f; pid_pitch_angle.Kd = 0.0f;
+
+    pid_roll_angle.output_limit = 400.0f;   pid_roll_angle.integral_limit = 400.0f;
+    pid_pitch_angle.output_limit = 400.0f;  pid_pitch_angle.integral_limit = 400.0f;
+
+    // THÔNG SỐ VÒNG TỐC ĐỘ (Rate Loop)
+    pid_roll_rate.Kp = 0.625f;  pid_roll_rate.Ki = 0.0f;  pid_roll_rate.Kd = 0.0f;
+    pid_pitch_rate.Kp = 0.625f; pid_pitch_rate.Ki = 0.0f; pid_pitch_rate.Kd = 0.0f;
+
+    // Yaw chỉ chạy Rate Loop (Do không có La bàn/Compass)
+    pid_yaw_rate.Kp = 4.0f;     pid_yaw_rate.Ki = 0.0f;   pid_yaw_rate.Kd = 0.0f;
+
+    pid_roll_rate.output_limit = 400.0f;   pid_roll_rate.integral_limit = 200.0f;
+    pid_pitch_rate.output_limit = 400.0f;  pid_pitch_rate.integral_limit = 200.0f;
+    pid_yaw_rate.output_limit = 400.0f;    pid_yaw_rate.integral_limit = 200.0f;
+}
+
+// ---------------------------------------------------------
+// 4. HÀM CHÍNH - GỌI MỖI 1MS TỪ PID TASK
+// ---------------------------------------------------------
+void FC_PID_Run_1ms(void) {
+    // Biến thời gian chuẩn của hệ thống
+    float xt = 0.001f;
+
+    // Lấy tín hiệu RC (Giả sử rc_channels[0..3] là Roll, Pitch, Throttle, Yaw)
+    float rc_roll     = rc_channels[0];
+    float rc_pitch    = rc_channels[1];
+    float throttle    = rc_channels[2];
+    float rc_yaw      = rc_channels[3];
+
+    // ===============================================
+    // HÀNG RÀO AN TOÀN (TỪ BÀI HỌC CỦA ESP32)
+    // ===============================================
+    if (throttle < 1030 || motor_state == MOTOR_DISARMED) {
+        // Ép chết 4 ESC về mức ngắt
+        FC_Motor_SetPWM(1000, 1000, 1000, 1000);
+
+        // RESET TOÀN DIỆN KHÂU I VÀ PREV_ERROR
+        pid_roll_angle.error_integral = 0;  pid_roll_angle.prev_error = 0;
+        pid_pitch_angle.error_integral = 0; pid_pitch_angle.prev_error = 0;
+        pid_roll_rate.error_integral = 0;   pid_roll_rate.prev_error = 0;
+        pid_pitch_rate.error_integral = 0;  pid_pitch_rate.prev_error = 0;
+        pid_yaw_rate.error_integral = 0;    pid_yaw_rate.prev_error = 0;
+
+        return; // Thoát ngay, không tính toán dư thừa
+    }
+
+    // ===============================================
+    // CHUYỂN ĐỔI RC SANG SETPOINT GÓC & TỐC ĐỘ
+    // ===============================================
+    // Áp dụng hệ số 0.1 và 0.15 y hệt code ESP32
+    float desired_angle_roll  = 0.1f * (rc_roll - 1500.0f);
+    float desired_angle_pitch = 0.1f * (rc_pitch - 1500.0f);
+    float desired_rate_yaw    = 0.15f * (rc_yaw - 1500.0f);
+
+    // ===============================================
+    // VÒNG LẶP GÓC (ANGLE LOOP)
+    // ===============================================
+    float desired_rate_roll  = FC_PID_Calculate(&pid_roll_angle, desired_angle_roll, mpu_data.Roll, xt);
+    float desired_rate_pitch = FC_PID_Calculate(&pid_pitch_angle, desired_angle_pitch, mpu_data.Pitch, xt);
+
+    // ===============================================
+    // VÒNG LẶP TỐC ĐỘ (RATE LOOP)
+    // ===============================================
+    float roll_output  = FC_PID_Calculate(&pid_roll_rate, desired_rate_roll, mpu_data.Gx, xt);
+    float pitch_output = FC_PID_Calculate(&pid_pitch_rate, desired_rate_pitch, mpu_data.Gy, xt);
+    float yaw_output   = FC_PID_Calculate(&pid_yaw_rate, desired_rate_yaw, mpu_data.Gz, xt);
+
+    // ===============================================
+    // TRỘN TÍN HIỆU (QUAD-X MIXING)
+    // Căn cứ theo thiết lập 4 ESCs của máy bay
+    // ===============================================
+    // Lưu ý: Giới hạn throttle để chừa dư địa cho PID hoạt động
+    if (throttle > 1800) throttle = 1800;
+
+    int16_t m1 = throttle - roll_output - pitch_output - yaw_output;
+    int16_t m2 = throttle - roll_output + pitch_output + yaw_output;
+    int16_t m3 = throttle + roll_output + pitch_output - yaw_output;
+    int16_t m4 = throttle + roll_output - pitch_output + yaw_output;
+
+    // Giới hạn an toàn tuyệt đối chống cháy ESC
+    int16_t motor_idle = 1170; // Theo thông số của ESP32
+
+        if (m1 < motor_idle) m1 = motor_idle;
+        if (m1 > 1999) m1 = 1999;
+
+        if (m2 < motor_idle) m2 = motor_idle;
+        if (m2 > 1999) m2 = 1999;
+
+        if (m3 < motor_idle) m3 = motor_idle;
+        if (m3 > 1999) m3 = 1999;
+
+        if (m4 < motor_idle) m4 = motor_idle;
+        if (m4 > 1999) m4 = 1999;
+
+    FC_Motor_SetPWM(m1, m2, m3, m4);
+}

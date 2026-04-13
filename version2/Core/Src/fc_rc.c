@@ -3,6 +3,8 @@
 #include "main.h"
 
 volatile uint16_t rc_channels[MAX_CHANNELS];
+volatile uint16_t rc_channels[MAX_CHANNELS];
+uint16_t rc_center[4] = {1500, 1500, 1500, 1500}; // ← thêm dòng này
 static uint16_t current_channel = 0;
 static uint16_t last_capture = 0;
 
@@ -17,7 +19,35 @@ void FC_RC_Init(void) {
     }
     rc_channels[2] = 1000; // Riêng kênh 3 (Ga - Throttle) ép về mức thấp nhất
 }
+void FC_RC_CalibrateCenter(void) {
+    HAL_Delay(500);
 
+    uint32_t sum0 = 0, sum1 = 0, sum3 = 0;
+
+    for (int i = 0; i < 100; i++) {
+        sum0 += rc_channels[0];
+        sum1 += rc_channels[1];
+        sum3 += rc_channels[3];
+        HAL_Delay(10);
+    }
+
+   /* rc_center[0] = sum0 / 100;
+    rc_center[1] = sum1 / 100;
+    rc_center[2] = 1500;
+    rc_center[3] = sum3 / 100;*/
+
+    rc_center[0] = 1533;
+    rc_center[1] = 1533;
+    rc_center[2] = 1500;
+    rc_center[3] = 1534; // Đo từ rc_channels[3] thực tế
+    /* Kiểm tra hợp lệ, fallback nếu tay cầm chưa kết nối
+    for (int i = 0; i < 4; i++) {
+        if (i == 2) continue;
+        if (rc_center[i] < 1200 || rc_center[i] > 1800) {
+            rc_center[i] = 1500;
+        }
+    }*/
+}
 // STM32 sẽ tự động gọi hàm này mỗi khi có tín hiệu cạnh lên ở chân PA6
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM3 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {

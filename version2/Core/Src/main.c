@@ -95,7 +95,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+   HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -116,22 +116,29 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
-	// 1. Khởi tạo Motor (Bật PWM và ép xung về 1000us ngay lập tức để an toàn)
-	FC_Motor_Init();
-	FC_RC_Init();
-	//2. Khởi tạo và cài đặt dải đo cho MPU6050
-		  FC_MPU6050_Init();
-		  FC_MPU6050_Calibrate();
-    //3. BẮT BUỘC PHẢI CÓ DÒNG NÀY ĐỂ NẠP THÔNG SỐ KP, KI, KD
-		  FC_PID_Init();
-	// 4. Bật ngắt Input Capture để đọc PPM (Sẽ xử lý trong fc_rc.c sau)
+  FC_Motor_Init();
+  FC_MPU6050_Init();
+  FC_RC_Init();
 
+  // THÊM DÒNG NÀY — start TIM3 để PPM interrupt hoạt động
+  HAL_TIM_IC_Start_IT(&htim3, TIM_CHANNEL_1);
 
-	HAL_TIM_IC_Start_IT(&htim3, TIM_CHANNEL_1);
+  // Chờ thêm 1 giây để PPM ổn định trước khi đo
+  HAL_Delay(1000);
 
-	// 5. Bật ngắt Timer 4 để tạo chu kỳ 1ms kích hoạt PID
-	HAL_TIM_Base_Start_IT(&htim4);
+  // LED nhấp nháy báo hiệu đang calibrate
+  // Tay cầm phải để GIỮA lúc này
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0); HAL_Delay(300);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1); HAL_Delay(300);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0); HAL_Delay(300);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1); HAL_Delay(300);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0); HAL_Delay(300);
 
+  FC_RC_CalibrateCenter(); // 1 giây đo center
+
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1); // LED tắt = xong
+
+  FC_PID_Init();
 
   /* USER CODE END 2 */
 
@@ -466,6 +473,13 @@ static void MX_GPIO_Init(void)
 void StartPIDTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
+	// 1. Khởi tạo và Calib MPU khi RTOS đã chạy (osDelay hoạt động an toàn)
+	    FC_MPU6050_Init();
+	    osDelay(200);            // Chờ cảm biến ổn định
+	    FC_MPU6050_Calibrate();  // Tính sai số tĩnh (Gyro Offset)
+	    // 2. CỰC KỲ QUAN TRỌNG: Calib xong xuôi MỚI bật Timer 4
+	    // Timer 4 sẽ tự động gõ nhịp 1ms và tự động gọi DMA!
+	    HAL_TIM_Base_Start_IT(&htim4);
 	/* Infinite loop */
 	for (;;) {
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);

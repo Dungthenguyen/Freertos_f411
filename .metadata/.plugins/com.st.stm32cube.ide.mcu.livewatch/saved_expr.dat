@@ -3,3 +3,8 @@ mpu_data.Roll
 mpu_data.Pitch
 motor_pwm
 RecorderDataPtr
+mpu_data
+rc_channels
+rc_center[0]
+rc_center[1]
+rc_center[3]

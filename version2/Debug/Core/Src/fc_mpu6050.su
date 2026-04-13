@@ -1,4 +1,4 @@
 ../Core/Src/fc_mpu6050.c:23:6:FC_MPU6050_Init	32	static
-../Core/Src/fc_mpu6050.c:54:6:FC_MPU6050_Calibrate	64	static
-../Core/Src/fc_mpu6050.c:81:6:FC_MPU6050_Read_DMA	16	static
-../Core/Src/fc_mpu6050.c:86:6:HAL_I2C_MemRxCpltCallback	40	static,ignoring_inline_asm
+../Core/Src/fc_mpu6050.c:54:6:FC_MPU6050_Calibrate	80	static
+../Core/Src/fc_mpu6050.c:102:6:FC_MPU6050_Read_DMA	16	static
+../Core/Src/fc_mpu6050.c:107:6:HAL_I2C_MemRxCpltCallback	40	static,ignoring_inline_asm
