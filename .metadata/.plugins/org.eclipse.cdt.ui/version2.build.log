@@ -1,10 +1,17 @@
-13:39:49 **** Incremental Build of configuration Debug for project version2 ****
+20:17:35 **** Incremental Build of configuration Debug for project version2 ****
 make -j12 all 
+arm-none-eabi-gcc "../Core/Src/fc_pid.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F411xE -c -I../Core/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/CMSIS/Include -I../Middlewares/Third_Party/FreeRTOS/Source/include -I../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -I"D:/Nam_4/KI_II/BUILD_DRONE/Flight-controler/Freertos_f411/version2/TraceRecorderSource/include" -I"D:/Nam_4/KI_II/BUILD_DRONE/Flight-controler/Freertos_f411/version2/TraceRecorderSource/config" -I"D:/Nam_4/KI_II/BUILD_DRONE/Flight-controler/Freertos_f411/version2/TraceRecorderSource/kernelports/FreeRTOS/include" -I"D:/Nam_4/KI_II/BUILD_DRONE/Flight-controler/Freertos_f411/version2/TraceRecorderSource/kernelports/FreeRTOS/config" -I"D:/Nam_4/KI_II/BUILD_DRONE/Flight-controler/Freertos_f411/version2/TraceRecorderSource/streamports/RingBuffer/config" -I"D:/Nam_4/KI_II/BUILD_DRONE/Flight-controler/Freertos_f411/version2/TraceRecorderSource/streamports/RingBuffer/include" -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/fc_pid.d" -MT"Core/Src/fc_pid.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/fc_pid.o"
+arm-none-eabi-gcc -o "version2.elf" @"objects.list"   -mcpu=cortex-m4 -T"D:\Nam_4\KI_II\BUILD_DRONE\Flight-controler\Freertos_f411\version2\STM32F411CEUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="version2.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: version2.elf
+ 
 arm-none-eabi-size  version2.elf 
+arm-none-eabi-objdump -h -S version2.elf  > "version2.list"
    text	   data	    bss	    dec	    hex	filename
-  54984	    112	  34224	  89320	  15ce8	version2.elf
+  55992	    144	  34216	  90352	  160f0	version2.elf
 Finished building: default.size.stdout
  
+Finished building: version2.list
+ 
 
-13:39:50 Build Finished. 0 errors, 0 warnings. (took 1s.134ms)
+20:17:36 Build Finished. 0 errors, 0 warnings. (took 794ms)
 

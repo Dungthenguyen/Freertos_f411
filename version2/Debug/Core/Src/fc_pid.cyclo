@@ -1,3 +1,8 @@
-../Core/Src/fc_pid.c:19:7:FC_PID_Calculate	5
-../Core/Src/fc_pid.c:53:6:FC_PID_Init	1
-../Core/Src/fc_pid.c:76:6:FC_PID_Run_1ms	24
+../Core/Src/fc_pid.c:124:14:clampf	3
+../Core/Src/fc_pid.c:134:14:apply_deadband	3
+../Core/Src/fc_pid.c:141:13:pid_reset	1
+../Core/Src/fc_pid.c:148:13:pid_reset_all	1
+../Core/Src/fc_pid.c:156:17:limit_motor_pwm	1
+../Core/Src/fc_pid.c:161:7:FC_PID_Calculate	2
+../Core/Src/fc_pid.c:184:6:FC_PID_Init	1
+../Core/Src/fc_pid.c:218:6:FC_PID_Run_1ms	16

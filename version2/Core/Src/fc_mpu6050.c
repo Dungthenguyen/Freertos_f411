@@ -1,7 +1,7 @@
 #include "fc_mpu6050.h"
 #include "main.h"
 #include "cmsis_os.h"
-#include "fc_kalman.h"
+#include "cmsis_os.h"
 #include <math.h>
 
 extern I2C_HandleTypeDef hi2c1;
@@ -12,9 +12,8 @@ extern osThreadId pidTaskHandle;
 uint8_t mpu_rx_buffer[14];
 MPU6050_t mpu_data;
 
-// Khai báo 2 đối tượng Kalman cho Roll và Pitch
-Kalman_t kalman_roll;
-Kalman_t kalman_pitch;
+// Biến lưu trữ cờ khởi tạo góc ban đầu
+static bool is_first_run = true;
 
 // Các biến lưu giá trị bù trừ sai số (Offset)
 float Gyro_X_CAL = 0, Gyro_Y_CAL = 0, Gyro_Z_CAL = 0;
@@ -44,10 +43,6 @@ void FC_MPU6050_Init(void) {
         Data = 0x10;
         HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, 0x1C, 1, &Data, 1, 1000);
     }
-
-    // Khởi tạo 2 bộ lọc Kalman
-    FC_Kalman_Init(&kalman_roll);
-    FC_Kalman_Init(&kalman_pitch);
 }
 
 // Hàm hiệu chuẩn: Đọc 1000 mẫu khi mạch nằm im để tính sai số
@@ -116,13 +111,14 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
         mpu_data.Gyro_Z_RAW = (int16_t)(mpu_rx_buffer[12] << 8 | mpu_rx_buffer[13]);
 
         // 2. TRỪ SAI SỐ (CAL) VÀ CHIA TỶ LỆ TRÊN HỆ FLOAT ĐỂ GIỮ CHÍNH XÁC
-                mpu_data.Ax = (mpu_data.Accel_X_RAW - Accel_X_CAL) / 4096.0f;
-                mpu_data.Ay = (mpu_data.Accel_Y_RAW - Accel_Y_CAL) / 4096.0f;
-                // ĐÃ ÁP DỤNG TRỪ SAI SỐ CHO TRỤC Z
-                mpu_data.Az = (mpu_data.Accel_Z_RAW - Accel_Z_CAL) / 4096.0f;
-                mpu_data.Gx = (mpu_data.Gyro_X_RAW - Gyro_X_CAL) / 65.5f;
-                mpu_data.Gy = (mpu_data.Gyro_Y_RAW - Gyro_Y_CAL) / 65.5f;
-                mpu_data.Gz = (mpu_data.Gyro_Z_RAW - Gyro_Z_CAL) / 65.5f;
+        // CHÚ Ý: DO MPU LẮP NGƯỢC X 180 ĐỘ (HƯỚNG VỀ SAU) NÊN CẦN ĐẢO DẤU CẢ TRỤC X VÀ Y
+        mpu_data.Ax = -((mpu_data.Accel_X_RAW - Accel_X_CAL) / 4096.0f);
+        mpu_data.Ay = -((mpu_data.Accel_Y_RAW - Accel_Y_CAL) / 4096.0f);
+        // ĐÃ ÁP DỤNG TRỪ SAI SỐ CHO TRỤC Z
+        mpu_data.Az = (mpu_data.Accel_Z_RAW - Accel_Z_CAL) / 4096.0f;
+        mpu_data.Gx = -((mpu_data.Gyro_X_RAW - Gyro_X_CAL) / 65.5f);
+        mpu_data.Gy = -((mpu_data.Gyro_Y_RAW - Gyro_Y_CAL) / 65.5f);
+        mpu_data.Gz = (mpu_data.Gyro_Z_RAW - Gyro_Z_CAL) / 65.5f;
 
                 static float gx_filtered = 0.0f;
                 static float gy_filtered = 0.0f;
@@ -140,10 +136,19 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
         float accel_roll  = atan2(mpu_data.Ay, mpu_data.Az) * 180.0f / M_PI;
         float accel_pitch = atan2(-mpu_data.Ax, sqrt(mpu_data.Ay * mpu_data.Ay + mpu_data.Az * mpu_data.Az)) * 180.0f / M_PI;
 
-        // 4. Lọc qua Kalman
-        float xt = 0.001f;
-        mpu_data.Roll = FC_Kalman_GetAngle(&kalman_roll, accel_roll, mpu_data.Gx, xt);
-        mpu_data.Pitch = FC_Kalman_GetAngle(&kalman_pitch, accel_pitch, mpu_data.Gy, xt);
+        // 4. Lọc bù (Complementary Filter) để tối ưu thay cho Kalman
+        float dt = 0.001f; // Tốc độ lấy mẫu 1ms
+        float alpha = 0.996f; // Hệ số lọc bù (Tuning), alpha càng gần 1 càng tin tưởng Gyro
+
+        // Khởi tạo góc ban đầu bằng gia tốc để tránh bị trôi lúc bật nguồn
+        if (is_first_run) {
+            mpu_data.Roll = accel_roll;
+            mpu_data.Pitch = accel_pitch;
+            is_first_run = false;
+        } else {
+            mpu_data.Roll = alpha * (mpu_data.Roll + mpu_data.Gx * dt) + (1.0f - alpha) * accel_roll;
+            mpu_data.Pitch = alpha * (mpu_data.Pitch + mpu_data.Gy * dt) + (1.0f - alpha) * accel_pitch;
+        }
 
         // 5. Đánh thức PID Task
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;

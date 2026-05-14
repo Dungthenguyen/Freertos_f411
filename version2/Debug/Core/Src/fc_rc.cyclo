@@ -1,4 +1,5 @@
-../Core/Src/fc_rc.c:15:6:FC_RC_Init	2
-../Core/Src/fc_rc.c:22:6:FC_RC_CalibrateCenter	2
-../Core/Src/fc_rc.c:52:6:HAL_TIM_IC_CaptureCallback	8
-../Core/Src/fc_rc.c:83:6:FC_RC_Process	9
+../Core/Src/fc_rc.c:19:13:yaw_is_centered	3
+../Core/Src/fc_rc.c:25:6:FC_RC_Init	2
+../Core/Src/fc_rc.c:34:6:FC_RC_CalibrateCenter	6
+../Core/Src/fc_rc.c:64:6:HAL_TIM_IC_CaptureCallback	8
+../Core/Src/fc_rc.c:88:6:FC_RC_Process	11

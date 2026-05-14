@@ -1,0 +1,311 @@
+#include "fc_pid.h"
+#include "fc_rc.h"
+#include "fc_mpu6050.h"
+#include "fc_motor.h"
+
+extern uint16_t rc_center[4];
+
+PID_Controller_t pid_roll_angle;
+PID_Controller_t pid_pitch_angle;
+
+PID_Controller_t pid_roll_rate;
+PID_Controller_t pid_pitch_rate;
+PID_Controller_t pid_yaw_rate;
+
+#define PID_DT_SEC                 0.001f
+#define RC_DEADBAND_US             10.0f
+#define YAW_RC_DEADBAND_US         30.0f
+#define MAX_ANGLE_DEG              20.0f
+#define MAX_YAW_RATE_DPS           60.0f
+#define THROTTLE_CUTOFF_US         ((float)FC_MOTOR_START_US)
+#define THROTTLE_PID_MAX_US        1900.0f
+
+/*
+ * Tune one problem at a time. While pitch is still flipping forward, keep yaw
+ * correction out of the mixer so it cannot add diagonal motor imbalance.
+ * Set this back to 1 only after roll/pitch can lift and settle.
+ */
+#define YAW_PID_ENABLE             0
+
+/*
+ * Tuning panel, similar to the ESP32 example:
+ * - Tune RATE_ROLL_PITCH_* first. These are the main gains for lift tests.
+ * - ANGLE_ROLL_PITCH_* only converts stick/angle error to a desired rate.
+ * - Keep I at 0 until the quad can hover without flipping.
+ */
+//Vòng góc
+#define ANGLE_ROLL_PITCH_KP        1.000000f
+#define ANGLE_ROLL_PITCH_KI        0.000000f
+#define ANGLE_ROLL_PITCH_KD        0.000000f
+
+#define ANGLE_ROLL_PITCH_LIMIT     220.0f
+#define ANGLE_ROLL_PITCH_I_LIMIT   0.0f
+//Vòng tốc độ góc
+#define RATE_ROLL_PITCH_KP         0.000000f
+#define RATE_ROLL_PITCH_KI         0.000000f
+#define RATE_ROLL_PITCH_KD         0.000000f
+
+#define RATE_ROLL_PITCH_LIMIT      250.0f
+#define RATE_ROLL_PITCH_I_LIMIT    0.0f
+//Hướng
+#define RATE_YAW_KP                0.000000f
+#define RATE_YAW_KI                0.000000f
+#define RATE_YAW_KD                0.000000f
+
+#define RATE_YAW_LIMIT             35.0f
+#define RATE_YAW_I_LIMIT           0.0f
+
+/*
+ * Motor layout, view from top:
+ *
+ *          FRONT
+ *      M1          M4
+ *
+ *      M2          M3
+ *          REAR
+ *
+ * TIM2_CH1 -> M1 front-left
+ * TIM2_CH2 -> M2 rear-left
+ * TIM2_CH3 -> M3 rear-right
+ * TIM2_CH4 -> M4 front-right
+ *
+ * Current MPU mounting:
+ * - Leaning backward makes mpu_data.Pitch negative.
+ * - That must increase M2/M3 and decrease M1/M4.
+ */
+#define ROLL_MIX_SIGN              1.0f
+#define PITCH_MIX_SIGN            -1.0f
+#define YAW_MIX_SIGN               1.0f
+
+volatile float dbg_pid_roll_output = 0.0f;
+volatile float dbg_pid_pitch_output = 0.0f;
+volatile float dbg_pid_yaw_output = 0.0f;
+volatile float dbg_rc_roll = 1500.0f;
+volatile float dbg_rc_pitch = 1500.0f;
+volatile float dbg_rc_throttle = 1000.0f;
+volatile float dbg_rc_yaw = 1500.0f;
+volatile float dbg_desired_angle_roll = 0.0f;
+volatile float dbg_desired_angle_pitch = 0.0f;
+volatile float dbg_desired_rate_roll = 0.0f;
+volatile float dbg_desired_rate_pitch = 0.0f;
+volatile float dbg_desired_rate_yaw = 0.0f;
+volatile float dbg_gyro_roll_rate = 0.0f;
+volatile float dbg_gyro_pitch_rate = 0.0f;
+volatile float dbg_gyro_yaw_rate = 0.0f;
+volatile float dbg_roll_rate_i = 0.0f;
+volatile float dbg_pitch_rate_i = 0.0f;
+volatile uint16_t dbg_pid_m1 = FC_MOTOR_MIN_US;
+volatile uint16_t dbg_pid_m2 = FC_MOTOR_MIN_US;
+volatile uint16_t dbg_pid_m3 = FC_MOTOR_MIN_US;
+volatile uint16_t dbg_pid_m4 = FC_MOTOR_MIN_US;
+
+static float clampf(float value, float min_value, float max_value) {
+    if (value < min_value) {
+        return min_value;
+    }
+    if (value > max_value) {
+        return max_value;
+    }
+    return value;
+}
+
+static float apply_deadband(float value, float center, float deadband) {
+    if ((value > (center - deadband)) && (value < (center + deadband))) {
+        return center;
+    }
+    return value;
+}
+
+static void pid_reset(PID_Controller_t *pid, float measurement) {
+    pid->error_integral = 0.0f;
+    pid->prev_error = 0.0f;
+    pid->prev_measurement = measurement;
+    pid->previous_measurement = measurement;
+}
+
+static void pid_reset_all(float roll, float pitch, float gx, float gy, float gz) {
+    pid_reset(&pid_roll_angle, roll);
+    pid_reset(&pid_pitch_angle, pitch);
+    pid_reset(&pid_roll_rate, gx);
+    pid_reset(&pid_pitch_rate, gy);
+    pid_reset(&pid_yaw_rate, gz);
+}
+
+static uint16_t limit_motor_pwm(float pwm) {
+    pwm = clampf(pwm, (float)FC_MOTOR_IDLE_US, (float)FC_MOTOR_MAX_US);
+    return (uint16_t)pwm;
+}
+
+float FC_PID_Calculate(PID_Controller_t *pid, float setpoint, float measurement, float xt) {
+    float error = setpoint - measurement;
+    float p_out = pid->Kp * error;
+
+    if (pid->Ki > 0.0f) {
+        pid->error_integral += pid->Ki * (error + pid->prev_error) * (xt * 0.5f);
+        pid->error_integral = clampf(pid->error_integral,
+                                     -pid->integral_limit,
+                                     pid->integral_limit);
+    } else {
+        pid->error_integral = 0.0f;
+    }
+
+    float d_out = -pid->Kd * ((measurement - pid->prev_measurement) / xt);
+
+    pid->prev_error = error;
+    pid->prev_measurement = measurement;
+    pid->previous_measurement = measurement;
+
+    float output = p_out + pid->error_integral + d_out;
+    return clampf(output, -pid->output_limit, pid->output_limit);
+}
+
+void FC_PID_Init(void) {
+    pid_roll_angle.Kp = ANGLE_ROLL_PITCH_KP;
+    pid_roll_angle.Ki = ANGLE_ROLL_PITCH_KI;
+    pid_roll_angle.Kd = ANGLE_ROLL_PITCH_KD;
+    pid_roll_angle.output_limit = ANGLE_ROLL_PITCH_LIMIT;
+    pid_roll_angle.integral_limit = ANGLE_ROLL_PITCH_I_LIMIT;
+
+    pid_pitch_angle.Kp = ANGLE_ROLL_PITCH_KP;
+    pid_pitch_angle.Ki = ANGLE_ROLL_PITCH_KI;
+    pid_pitch_angle.Kd = ANGLE_ROLL_PITCH_KD;
+    pid_pitch_angle.output_limit = ANGLE_ROLL_PITCH_LIMIT;
+    pid_pitch_angle.integral_limit = ANGLE_ROLL_PITCH_I_LIMIT;
+
+    pid_roll_rate.Kp = RATE_ROLL_PITCH_KP;
+    pid_roll_rate.Ki = RATE_ROLL_PITCH_KI;
+    pid_roll_rate.Kd = RATE_ROLL_PITCH_KD;
+    pid_roll_rate.output_limit = RATE_ROLL_PITCH_LIMIT;
+    pid_roll_rate.integral_limit = RATE_ROLL_PITCH_I_LIMIT;
+
+    pid_pitch_rate.Kp = RATE_ROLL_PITCH_KP;
+    pid_pitch_rate.Ki = RATE_ROLL_PITCH_KI;
+    pid_pitch_rate.Kd = RATE_ROLL_PITCH_KD;
+    pid_pitch_rate.output_limit = RATE_ROLL_PITCH_LIMIT;
+    pid_pitch_rate.integral_limit = RATE_ROLL_PITCH_I_LIMIT;
+
+    pid_yaw_rate.Kp = RATE_YAW_KP;
+    pid_yaw_rate.Ki = RATE_YAW_KI;
+    pid_yaw_rate.Kd = RATE_YAW_KD;
+    pid_yaw_rate.output_limit = RATE_YAW_LIMIT;
+    pid_yaw_rate.integral_limit = RATE_YAW_I_LIMIT;
+
+    pid_reset_all(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+void FC_PID_Run_1ms(void) {
+    float rc_roll = rc_channels[0];
+    float rc_pitch = rc_channels[1];
+    float throttle = rc_channels[2];
+    float rc_yaw = rc_channels[3];
+
+    rc_roll = apply_deadband(rc_roll, (float)rc_center[0], RC_DEADBAND_US);
+    rc_pitch = apply_deadband(rc_pitch, (float)rc_center[1], RC_DEADBAND_US);
+    rc_yaw = apply_deadband(rc_yaw, (float)rc_center[3], YAW_RC_DEADBAND_US);
+
+    dbg_rc_roll = rc_roll;
+    dbg_rc_pitch = rc_pitch;
+    dbg_rc_throttle = throttle;
+    dbg_rc_yaw = rc_yaw;
+
+    float gx_input = mpu_data.Gx;
+    float gy_input = mpu_data.Gy;
+    float gz_input = mpu_data.Gz;
+
+    if ((gx_input > -0.5f) && (gx_input < 0.5f)) {
+        gx_input = 0.0f;
+    }
+    if ((gy_input > -0.5f) && (gy_input < 0.5f)) {
+        gy_input = 0.0f;
+    }
+    if ((gz_input > -0.5f) && (gz_input < 0.5f)) {
+        gz_input = 0.0f;
+    }
+    dbg_gyro_roll_rate = gx_input;
+    dbg_gyro_pitch_rate = gy_input;
+    dbg_gyro_yaw_rate = gz_input;
+
+    if ((throttle < THROTTLE_CUTOFF_US) ||
+        (motor_state == MOTOR_DISARMED) ||
+        !rc_yaw_centered_after_arm) {
+        if (motor_state == MOTOR_ARMED) {
+            FC_Motor_SetPWM(FC_MOTOR_MIN_US,
+                            FC_MOTOR_MIN_US,
+                            FC_MOTOR_MIN_US,
+                            FC_MOTOR_MIN_US);
+        }
+
+        pid_reset_all(mpu_data.Roll, mpu_data.Pitch, gx_input, gy_input, gz_input);
+        dbg_pid_roll_output = 0.0f;
+        dbg_pid_pitch_output = 0.0f;
+        dbg_pid_yaw_output = 0.0f;
+        dbg_desired_rate_roll = 0.0f;
+        dbg_desired_rate_pitch = 0.0f;
+        dbg_roll_rate_i = 0.0f;
+        dbg_pitch_rate_i = 0.0f;
+        return;
+    }
+
+    float desired_angle_roll = -0.1f * (rc_roll - (float)rc_center[0]);
+    float desired_angle_pitch = -0.1f * (rc_pitch - (float)rc_center[1]);
+    float desired_rate_yaw = 0.24f * (rc_yaw - (float)rc_center[3]);
+
+    desired_angle_roll = clampf(desired_angle_roll, -MAX_ANGLE_DEG, MAX_ANGLE_DEG);
+    desired_angle_pitch = clampf(desired_angle_pitch, -MAX_ANGLE_DEG, MAX_ANGLE_DEG);
+    desired_rate_yaw = clampf(desired_rate_yaw, -MAX_YAW_RATE_DPS, MAX_YAW_RATE_DPS);
+
+#if (YAW_PID_ENABLE == 0)
+    desired_rate_yaw = 0.0f;
+#endif
+
+    dbg_desired_angle_roll = desired_angle_roll;
+    dbg_desired_angle_pitch = desired_angle_pitch;
+    dbg_desired_rate_yaw = desired_rate_yaw;
+
+    float desired_rate_roll = FC_PID_Calculate(&pid_roll_angle,
+                                               desired_angle_roll,
+                                               mpu_data.Roll,
+                                               PID_DT_SEC);
+    float desired_rate_pitch = FC_PID_Calculate(&pid_pitch_angle,
+                                                desired_angle_pitch,
+                                                mpu_data.Pitch,
+                                                PID_DT_SEC);
+    dbg_desired_rate_roll = desired_rate_roll;
+    dbg_desired_rate_pitch = desired_rate_pitch;
+
+    float roll_output = FC_PID_Calculate(&pid_roll_rate,
+                                         desired_rate_roll,
+                                         gx_input,
+                                         PID_DT_SEC);
+    float pitch_output = FC_PID_Calculate(&pid_pitch_rate,
+                                          desired_rate_pitch,
+                                          gy_input,
+                                          PID_DT_SEC);
+    float yaw_output = FC_PID_Calculate(&pid_yaw_rate,
+                                        desired_rate_yaw,
+                                        gz_input,
+                                        PID_DT_SEC);
+    dbg_pid_roll_output = roll_output;
+    dbg_pid_pitch_output = pitch_output;
+    dbg_pid_yaw_output = yaw_output;
+    dbg_roll_rate_i = pid_roll_rate.error_integral;
+    dbg_pitch_rate_i = pid_pitch_rate.error_integral;
+
+    throttle = clampf(throttle, (float)FC_MOTOR_IDLE_US, THROTTLE_PID_MAX_US);
+
+    float roll_mix = ROLL_MIX_SIGN * roll_output;
+    float pitch_mix = PITCH_MIX_SIGN * pitch_output;
+    float yaw_mix = YAW_MIX_SIGN * yaw_output;
+
+    uint16_t m1 = limit_motor_pwm(throttle + roll_mix + pitch_mix - yaw_mix); // front-left
+    uint16_t m2 = limit_motor_pwm(throttle + roll_mix - pitch_mix + yaw_mix); // rear-left
+    uint16_t m3 = limit_motor_pwm(throttle - roll_mix - pitch_mix - yaw_mix); // rear-right
+    uint16_t m4 = limit_motor_pwm(throttle - roll_mix + pitch_mix + yaw_mix); // front-right
+
+    dbg_pid_m1 = m1;
+    dbg_pid_m2 = m2;
+    dbg_pid_m3 = m3;
+    dbg_pid_m4 = m4;
+
+    FC_Motor_SetPWM(m1, m2, m3, m4);
+}

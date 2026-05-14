@@ -1,0 +1,48 @@
+!SESSION 2026-05-11 10:52:00.157 -----------------------------------------------
+eclipse.buildId=Version 1.19.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_US
+Command-line arguments:  -os win32 -ws win32 -arch x86_64
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2026-05-11 10:52:13.175
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2026-05-11 10:52:13.176
+!MESSAGE Log4j2 initialized with config file D:\Freertos_f411\version2\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2026-05-11 10:52:15.477
+!MESSAGE Started RMI Server, listening on port 41337
+
+!ENTRY com.percepio.tracealyzer.core 1 0 2026-05-11 10:52:21.620
+!MESSAGE Activator.start(): Called from com.percepio.tracealyzer.core, version: 1.1.4.v201906041456
+
+!ENTRY com.percepio.tracealyzer.core 2 0 2026-05-11 10:52:21.623
+!MESSAGE ContextManager.reportWarning(): No debug context found
+
+!ENTRY com.percepio.tracealyzer.ui 1 0 2026-05-11 10:52:21.625
+!MESSAGE Activator.start(): Called from com.percepio.tracealyzer.ui, version: 1.1.4.v201906041456
+!SESSION 2026-05-11 10:54:54.232 -----------------------------------------------
+eclipse.buildId=Version 1.19.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_US
+Command-line arguments:  -os win32 -ws win32 -arch x86_64
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2026-05-11 10:55:05.513
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2026-05-11 10:55:05.513
+!MESSAGE Log4j2 initialized with config file D:\Freertos_f411\version2\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2026-05-11 10:55:08.873
+!MESSAGE Started RMI Server, listening on port 41337
+
+!ENTRY com.percepio.tracealyzer.core 1 0 2026-05-11 10:55:14.766
+!MESSAGE Activator.start(): Called from com.percepio.tracealyzer.core, version: 1.1.4.v201906041456
+
+!ENTRY com.percepio.tracealyzer.core 2 0 2026-05-11 10:55:14.770
+!MESSAGE ContextManager.reportWarning(): No debug context found
+
+!ENTRY com.percepio.tracealyzer.ui 1 0 2026-05-11 10:55:14.772
+!MESSAGE Activator.start(): Called from com.percepio.tracealyzer.ui, version: 1.1.4.v201906041456

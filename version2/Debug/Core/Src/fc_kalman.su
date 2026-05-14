@@ -1,2 +1,0 @@
-../Core/Src/fc_kalman.c:3:6:FC_Kalman_Init	16	static
-../Core/Src/fc_kalman.c:22:7:FC_Kalman_GetAngle	48	static

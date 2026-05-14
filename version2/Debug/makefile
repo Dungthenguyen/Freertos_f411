@@ -67,8 +67,8 @@ all: main-build
 main-build: version2.elf secondary-outputs
 
 # Tool invocations
-version2.elf version2.map: $(OBJS) $(USER_OBJS) D:\Nam_4\KI_II\Thiet_ke_so_va_lap_trinh_nhung\FC_freeRtosv2\version2\STM32F411CEUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "version2.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\Nam_4\KI_II\Thiet_ke_so_va_lap_trinh_nhung\FC_freeRtosv2\version2\STM32F411CEUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="version2.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+version2.elf version2.map: $(OBJS) $(USER_OBJS) D:\Nam_4\KI_II\BUILD_DRONE\Flight-controler\Freertos_f411\version2\STM32F411CEUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "version2.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\Nam_4\KI_II\BUILD_DRONE\Flight-controler\Freertos_f411\version2\STM32F411CEUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="version2.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
